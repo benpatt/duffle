@@ -3,9 +3,14 @@ package packager
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/deislabs/duffle/pkg/duffle/home"
+	"github.com/deislabs/duffle/pkg/marshal"
+	"github.com/deislabs/duffle/pkg/repo"
 
 	"github.com/deislabs/cnab-go/bundle"
 
@@ -42,11 +47,33 @@ func NewImporter(source, destination string, load loader.BundleLoader, verbose b
 }
 
 // Import decompresses a bundle from Source (location of the compressed bundle) and properly places artifacts in the correct location(s)
-func (im *Importer) Import() error {
-	_, _, err := im.Unzip()
+func (im *Importer) Import(home home.Home) error {
+	_, bun, err := im.Unzip() // the first arg is the unzipped destination that should be used for issue 758
+	if err != nil {
+		return err
+	}
+
+	data, digest, err := marshal.Bundle(bun)
+	if err != nil {
+		return fmt.Errorf("cannot marshal bundle: %v", err)
+	}
+
+	bundleDest := filepath.Join(home.Bundles(), digest)
+	if err = ioutil.WriteFile(bundleDest, data, 0644); err != nil {
+		return fmt.Errorf("could not write to %s: %v", bundleDest, err)
+	}
+
+	index, err := repo.LoadIndex(home.Repositories())
+	if err != nil {
+		return fmt.Errorf("cannot create or open %s: %v", home.Repositories(), err)
+	}
+
+	index.Add(bun.Name, bun.Version, digest)
+	if err := index.WriteFile(home.Repositories(), 0644); err != nil {
+		return fmt.Errorf("could not write to %s: %v", home.Repositories(), err)
+	}
 
 	// TODO: https://github.com/deislabs/duffle/issues/758
-
 	return err
 }
 

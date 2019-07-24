@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/deislabs/duffle/pkg/marshal"
+
 	"github.com/deislabs/cnab-go/bundle"
 	"github.com/docker/cli/cli/command"
 	cliconfig "github.com/docker/cli/cli/config"
@@ -15,12 +17,10 @@ import (
 	dockerflags "github.com/docker/cli/cli/flags"
 	"github.com/docker/cli/opts"
 	"github.com/docker/go-connections/tlsconfig"
-	"github.com/docker/go/canonical/json"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
 	"github.com/deislabs/duffle/pkg/builder"
-	"github.com/deislabs/duffle/pkg/crypto/digest"
 	"github.com/deislabs/duffle/pkg/duffle/home"
 	"github.com/deislabs/duffle/pkg/duffle/manifest"
 	"github.com/deislabs/duffle/pkg/imagebuilder"
@@ -149,7 +149,7 @@ func (b *buildCmd) run() (err error) {
 }
 
 func (b *buildCmd) writeBundle(bf *bundle.Bundle) (string, error) {
-	data, digest, err := marshalBundle(bf)
+	data, digest, err := marshal.Bundle(bf)
 	if err != nil {
 		return "", fmt.Errorf("cannot marshal bundle: %v", err)
 	}
@@ -161,21 +161,6 @@ func (b *buildCmd) writeBundle(bf *bundle.Bundle) (string, error) {
 	}
 
 	return digest, ioutil.WriteFile(filepath.Join(b.home.Bundles(), digest), data, 0644)
-}
-
-func marshalBundle(bf *bundle.Bundle) ([]byte, string, error) {
-	data, err := json.MarshalCanonical(bf)
-	if err != nil {
-		return nil, "", err
-	}
-	data = append(data, '\n') //TODO: why?
-
-	digest, err := digest.OfBuffer(data)
-	if err != nil {
-		return nil, "", fmt.Errorf("cannot compute digest from bundle: %v", err)
-	}
-
-	return data, digest, nil
 }
 
 func defaultDockerTLS() bool {
